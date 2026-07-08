@@ -1,15 +1,14 @@
+import jwt
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-import jwt
 
 app = FastAPI()
 
-# Assigned Values
 ISSUER = "https://idp.exam.local"
 AUDIENCE = "tds-owlcbe0r.apps.exam.local"
 
-# The RS256 Public Key exactly as provided
+# DHYAN RAHE: In lines ke aage koi SPACE (khali jagah) nahi honi chahiye!
 PUBLIC_KEY = """-----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA2okOHspNjgA+2rTLbeuY
 cxiP/hG8C6Sb9iwg3yiLAA4HCnpITcbWCSelbvbYGuc3EbNy4xFyf5Cbj5DHJMID
@@ -20,24 +19,22 @@ SI6iyrYbKR0NEBSqq4XkadEjsCs4F1RncsS4LlgniT7GlkL9Mce3b0wGLs9/7ZIX
 dQIDAQAB
 -----END PUBLIC KEY-----"""
 
-# Pydantic model to parse the incoming JSON body
 class TokenRequest(BaseModel):
     token: str
 
 @app.post("/verify")
 async def verify_token(request: TokenRequest):
     try:
-        # jwt.decode automatically checks the signature, expiry (exp), 
-        # audience (aud), and issuer (iss) when provided.
+        # Humne yahan leeway=60 (seconds) add kiya hai clock skew fix karne ke liye
         payload = jwt.decode(
             request.token,
             PUBLIC_KEY,
             algorithms=["RS256"],
             audience=AUDIENCE,
-            issuer=ISSUER
+            issuer=ISSUER,
+            leeway=60 
         )
         
-        # If decode succeeds, the token is perfectly valid.
         return {
             "valid": True,
             "email": payload.get("email"),
@@ -45,12 +42,7 @@ async def verify_token(request: TokenRequest):
             "aud": payload.get("aud")
         }
         
-    except jwt.ExpiredSignatureError:
-        # Token has expired
-        return JSONResponse(status_code=401, content={"valid": False})
-    except jwt.InvalidTokenError:
-        # Fails signature, audience, issuer, or tampering checks
-        return JSONResponse(status_code=401, content={"valid": False})
-    except Exception:
-        # Catch-all for any other weird malformed requests from the grader
+    except Exception as e:
+        # Agar token fail hota hai, toh exact reason ab Render ke logs mein print hoga
+        print(f"TOKEN REJECTED BECAUSE: {type(e).__name__} - {str(e)}")
         return JSONResponse(status_code=401, content={"valid": False})
